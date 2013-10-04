@@ -11,13 +11,13 @@ class RelSem(query: List[String], collection:Map[Int, String]) {
 
 			val tfs = for(document <- collection) yield (document._1, termFrequency(term, document._2))
 			val idf = inverseDocumentFrequency(tfs)
-			val tfidf = for(tf <- tfs.values) yield tf * idf
+			val tfidf = (for(tf <- tfs.values) yield tf * idf).toList
 
-			normalize(tfidf.toList)
+			normalize(tfidf)
 
 		})
 
-		val simulaity = for(List(a, b) <- vecs.sliding(2)) yield sim(a,b)
+		val similarity = for(List(a, b) <- vecs.sliding(2)) yield sim(a,b)
 		similarity foreach( println(_) )
 		
 	}
