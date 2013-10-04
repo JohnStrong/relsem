@@ -3,16 +3,15 @@ package relsem.master
 /** any term can link to any other term
 * the more directly terms are linked, the better their similarity
 */
-trait Term
-case class Source(id:Int, term:String) extends Term
-case class Target(source:Int, target:Int) extends Term
+case class Source(id:Int, term:String)
+case class Target(source:Int, target:Int)
 
 class RelSem(query: List[String]) {
 	
 	import math._
 
 	//collection of documents we already have stored
-	private val collection = Map(
+	private lazy val collection = Map(
 		1 -> "computer technology computer",
 		2 -> "free music on computer",
 		3 -> "scala programming"
@@ -41,17 +40,12 @@ class RelSem(query: List[String]) {
 
 		val normVecs = query map(term => {
 
-			println
-			println(term)
-
-			val tfs = for(document <- collection) yield (document._1, termFrequency(term, document._2))
-			println(tfs)
-
-			val idf = inverseDocumentFrequency(tfs.values.toList)
-			val tfidf = (for(tf <- tfs.values) yield tf * idf).toList
+			val tfs = for(document <- collection) yield (document._1, 
+				termFrequency(term, document._2))
 			
-			println("for term " + term + " => TFIDF: " + tfidf)
-
+			val idf = inverseDocumentFrequency(tfs.values)
+			val tfidf = for(tf <- tfs.values) yield tf * idf
+			
 			normalize(tfidf)
 
 		})
@@ -67,33 +61,37 @@ class RelSem(query: List[String]) {
 	}
 
 	// returns the idf for each term in the query (helps to reduce the common word problem)
-	private def inverseDocumentFrequency(tv:List[Double]):Double = {
+	private def inverseDocumentFrequency(tv:Iterable[Double]):Double = {
 
 		val occurences = tv.filter {
 			case x:Double if x > 0.0 => true
 			case _ => false
 		}
 
-		// total document size / documents with term
 		log((collection.size + 1)/(occurences.size + 1.0))/log(2)
 	}
 
-	// calculate the times a term t appears in a document d
-	private def termFrequency(t:String, d:String):Double = {
-		var f = 0.0
+	// calculate the times a term appears in a document
+	private def termFrequency(qTerm:String, documentStr:String):Double = {
 
-		d.split(" ").toList foreach(w => {
-			if(w.toLowerCase == t.toLowerCase)
-				f = f + 1.0
-		})
+		// take the id of the query term
+		// get the id from targets where source id matches the parameter id
+		// check if these id are included in the document
+		var qTerms = documentStr.split(" ")
 
-		// todo: calculate term relatedness
-
-		f
+		qTerms.filter({
+			case a:String if a == qTerm => true
+			case _ => false
+		}).size
 	}
 
+	// returns a list of values related the term
+	/*private def relatedness(id:Int, targets:List[Target], depth: Int):List[Double] = {
+		targets.filter(t => t.source == id)
+	}*/
+
 	// normalize the document to get the distance between the vectors
-	private def normalize(doc:List[Double]):List[Double] = {
+	private def normalize(doc:Iterable[Double]):Iterable[Double] = {
 		
 		val total = sqrt(doc.map(x => x * x).sum)
 
@@ -105,7 +103,6 @@ class RelSem(query: List[String]) {
 }
 
 object Test extends App {
-
 	val query = List("computer", "programming", "scala")
 	new RelSem(query).calculate
 }
