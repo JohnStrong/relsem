@@ -63,26 +63,19 @@ class RelSem(query: List[String]) {
 	// returns the idf for each term in the query (helps to reduce the common word problem)
 	private def inverseDocumentFrequency(tv:Iterable[Double]):Double = {
 
-		val occurences = tv.filter {
-			case x:Double if x > 0.0 => true
-			case _ => false
-		}
+		val occurences = tv.filter( x => x > 0.0 )
 
 		log((collection.size + 1)/(occurences.size + 1.0))/log(2)
 	}
 
 	// calculate the times a term appears in a document
-	private def termFrequency(qTerm:String, documentStr:String):Double = {
+	private def termFrequency(qTerm:String, document:String):Double = {
 
 		// take the id of the query term
 		// get the id from targets where source id matches the parameter id
 		// check if these id are included in the document
-		var qTerms = documentStr.split(" ")
-
-		qTerms.filter({
-			case a:String if a == qTerm => true
-			case _ => false
-		}).size
+		var terms = document.split(" ")
+		terms.filter(term => term == qTerm).size
 	}
 
 	// returns a list of values related the term
