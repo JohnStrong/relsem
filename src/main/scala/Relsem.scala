@@ -13,8 +13,8 @@ class RelSem(query: List[String]) {
 	//collection of documents we already have stored
 	private lazy val collection = Map(
 		1 -> "computer technology computer",
-		2 -> "free music on computer",
-		3 -> "scala programming"
+		2 -> "free music computer",
+		3 -> "scala programming music technology"
 	)
 
 	// list of terms we know about
@@ -40,68 +40,75 @@ class RelSem(query: List[String]) {
 
 		val normVecs = query map(term => {
 
-			val tfs = for(document <- collection) yield (document._1, 
-				termFrequency(term, document._2))
+			def tFRS:Map[Int, (Double, Double)]  = {
+				for(document <- collection) yield (document._1, 
+					termFrequency(term, document._2))
+			}
 			
-			val idf = inverseDocumentFrequency(tfs.values)
-			val tfidf = for(tf <- tfs.values) yield tf * idf
+			val tfrs = tFRS
 			
-			normalize(tfidf)
+			val ttf = tfrs.values.map(x => x._1 )
+			val ttr = tfrs.values.map(x => x._2 )
+
+			val idf = inverseDocumentFrequency(ttf)
+
+			normalize(for(t <-
+				(ttf, ttr).zipped.map(_ + _)) yield (t * idf))
 
 		})
 
 		// dotprod => doc1 * doc2 * doc3 * .... * docn
-		//val similarity = for(List(a, b) <- normVecs.sliding(2)) yield sim(a,b)
+		// calculate similarity
 		
 	}
 
 	// compute the similarity between 2 documents
-	def sim(a: List[Double], b:List[Double]):List[Double] = {
+	def sim(a: Iterable[Double], b:Iterable[Double]):Iterable[Double] = {
 		(a,b).zipped.map(_ * _)
 	}
 
 	// returns the idf for each term in the query (helps to reduce the common word problem)
-	private def inverseDocumentFrequency(tv:Iterable[Double]):Double = {
-
-		val occurences = tv.filter( x => x > 0.0 )
-		log((collection.size + 1)/(occurences.size + 1.0))/log(2)
+	private def inverseDocumentFrequency(ttf:Iterable[Double]):Double = {
+		log((collection.size + 1)/(
+			ttf.filter( x => x > 0.0 ).size + 1.0))/log(2)
 	}
 
-	// termFreq * termRelatedness => TermFrequencyAndRelatednessTotal
-	private def termFrequency(qTerm:String, document:String):Double = {
+	// (TermFrequency, TermToDocument Relatedness)
+	private def termFrequency(qTerm:String, document:String):Tuple2[Double, Double] = {
 		
 		// term frequency by size of the result matching queried term
 		var terms = document.split(" ")
 		var tf = terms.filter(term => term == qTerm).size
 
 		// find the queried term id
-		val tId = sources.find(s => s.term == qTerm) match {
-			case Some(t) => Some(t.id)
-			case _ => None
-		}
+		val sourceQTerm = sources.find(s => s.term == qTerm).getOrElse(
+			throw new Exception("failed to find matching source"))
 
 		// filter out every term in the document matching the query term
 		// map each resulting element against relatednes
-		val relatednessTotal = terms.filterNot(term => term == qTerm).map(term => {
-			sources.find(s => s.term == term) match {
-				case Some(s) => relatedness(tId, s.id)
-				case _ => 0.0
+		val termRelTotal = terms.filterNot(term => term == qTerm).map(term => {
+			sources.find(source => source.term == term) match {
+				case Some(s) => relatedness(sourceQTerm.id, s.id, 1)
+				case _ => 0
 			}
 		}).foldRight(0.0)(_ + _)
 
-		// query term frequency + total relatedness of document to query term
-		tf + relatednessTotal
+		(tf, termRelTotal)
 	}
 
-	// returns a value of relatedness each term has with the queried term
-	private def relatedness(queryTermId:Option[Int], docTermId:Int):Double = {
-		// TODO: implement relatedness method
+	/**	relatedness is measured by multiplying the base value (.5) by 
+	*	(1 / the depth at which is term was found) 
+	**/
+	private def relatedness(queryTermId:Int, docTermId:Int, depth:Int):Double = {
 		
-		//println
-		//println(queryTermId)
-		//println(docTermId)
+		var found = false
 
-		0.1
+		// fix later...	
+		targets.filter(target => target.source == queryTermId).map( term => term match {
+			case t:Target if t.target == docTermId => found = true; 0.5 * (1.0/depth)
+			case t:Target if t.target != docTermId && found == false => relatedness(t.target, docTermId, depth = depth + 1)
+			case _ => 0
+		}).foldRight(0.0)(_ + _)
 	}
 
 	// normalize the document to get the distance between the vectors
