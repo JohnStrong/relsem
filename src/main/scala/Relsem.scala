@@ -64,24 +64,45 @@ class RelSem(query: List[String]) {
 	private def inverseDocumentFrequency(tv:Iterable[Double]):Double = {
 
 		val occurences = tv.filter( x => x > 0.0 )
-
 		log((collection.size + 1)/(occurences.size + 1.0))/log(2)
 	}
 
-	// calculate the times a term appears in a document
+	// termFreq * termRelatedness => TermFrequencyAndRelatednessTotal
 	private def termFrequency(qTerm:String, document:String):Double = {
-
-		// take the id of the query term
-		// get the id from targets where source id matches the parameter id
-		// check if these id are included in the document
+		
+		// term frequency by size of the result matching queried term
 		var terms = document.split(" ")
-		terms.filter(term => term == qTerm).size
+		var tf = terms.filter(term => term == qTerm).size
+
+		// find the queried term id
+		val tId = sources.find(s => s.term == qTerm) match {
+			case Some(t) => Some(t.id)
+			case _ => None
+		}
+
+		// filter out every term in the document matching the query term
+		// map each resulting element against relatednes
+		val relatednessTotal = terms.filterNot(term => term == qTerm).map(term => {
+			sources.find(s => s.term == term) match {
+				case Some(s) => relatedness(tId, s.id)
+				case _ => 0.0
+			}
+		}).foldRight(0.0)(_ + _)
+
+		// query term frequency + total relatedness of document to query term
+		tf + relatednessTotal
 	}
 
-	// returns a list of values related the term
-	/*private def relatedness(id:Int, targets:List[Target], depth: Int):List[Double] = {
-		targets.filter(t => t.source == id)
-	}*/
+	// returns a value of relatedness each term has with the queried term
+	private def relatedness(queryTermId:Option[Int], docTermId:Int):Double = {
+		// TODO: implement relatedness method
+		
+		//println
+		//println(queryTermId)
+		//println(docTermId)
+
+		0.1
+	}
 
 	// normalize the document to get the distance between the vectors
 	private def normalize(doc:Iterable[Double]):Iterable[Double] = {
