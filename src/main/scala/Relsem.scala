@@ -1,19 +1,17 @@
 package relsem.master
 
-/** any term can link to any other term
-* the more directly terms are linked, the better their similarity
-*/
+//case classes for relatedness feature
 case class Source(id:Int, term:String)
 case class Target(source:Int, target:Int)
 
-class RelSem(query: List[String]) {
+class RelSem() {
 	
 	import math._
 
 	//collection of documents we already have stored
 	private lazy val collection = Map(
 		1 -> "computer technology computer",
-		2 -> "free music computer",
+		2 -> "scala operating system computer",
 		3 -> "scala programming music technology"
 	)
 
@@ -36,35 +34,24 @@ class RelSem(query: List[String]) {
 		Target(6, 5)
 	)
 
-	def calculate = {
+	// res => { q1(document_results), ....., qn(document_results) }
+	def calculate(query: List[String]):List[Iterable[Double]] = {
+		
+		def tFRS(term:String):Map[Int, (Double, Double)]  = {
+			for(document <- collection) yield (document._1, 
+				termFrequency(term, document._2))
+		}
 
-		val normVecs = query map(term => {
+		query map(term => {
 
-			def tFRS:Map[Int, (Double, Double)]  = {
-				for(document <- collection) yield (document._1, 
-					termFrequency(term, document._2))
-			}
-			
-			val tfrs = tFRS
-			
+			val tfrs = tFRS(term)
 			val ttf = tfrs.values.map(x => x._1 )
 			val ttr = tfrs.values.map(x => x._2 )
-
 			val idf = inverseDocumentFrequency(ttf)
 
 			normalize(for(t <-
 				(ttf, ttr).zipped.map(_ + _)) yield (t * idf))
-
-		})
-
-		// dotprod => doc1 * doc2 * doc3 * .... * docn
-		// calculate similarity
-		
-	}
-
-	// compute the similarity between 2 documents
-	def sim(a: Iterable[Double], b:Iterable[Double]):Iterable[Double] = {
-		(a,b).zipped.map(_ * _)
+		})		
 	}
 
 	// returns the idf for each term in the query (helps to reduce the common word problem)
@@ -96,14 +83,12 @@ class RelSem(query: List[String]) {
 		(tf, termRelTotal)
 	}
 
-	/**	relatedness is measured by multiplying the base value (.5) by 
-	*	(1 / the depth at which is term was found) 
-	**/
+	//relatedness measured by multiplying the base value (.5) by (1 / the depth at which is term was found)
 	private def relatedness(queryTermId:Int, docTermId:Int, depth:Int):Double = {
 		
+		// refractor at some stage
 		var found = false
 
-		// fix later...	
 		targets.filter(target => target.source == queryTermId).map( term => term match {
 			case t:Target if t.target == docTermId => found = true; 0.5 * (1.0/depth)
 			case t:Target if t.target != docTermId && found == false => relatedness(t.target, docTermId, depth = depth + 1)
@@ -124,6 +109,13 @@ class RelSem(query: List[String]) {
 }
 
 object Test extends App {
-	val query = List("computer", "programming", "scala")
-	new RelSem(query).calculate
+	
+	val results = new RelSem().calculate(
+		List("computer", "programming", "scala")
+	)
+
+	for(result <- results){
+		println
+		println("Document results: " + result) 
+	}
 }
