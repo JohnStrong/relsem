@@ -19,8 +19,8 @@ class RelSem() {
 	private lazy val sources = List(
 		Source(1, "computer"),
 		Source(2, "technology"),
-		Source(3, "free"),
-		Source(4, "music"),
+		Source(3, "operating"),
+		Source(4, "system"),
 		Source(5, "scala"),
 		Source(6, "programming")
 	)
@@ -28,6 +28,7 @@ class RelSem() {
 	// links between terms (relatedness)
 	private lazy val targets = List(
 		Target(1, 2),
+		Target(1, 4),
 		Target(1, 6),
 		Target(2, 4),
 		Target(4, 3),
