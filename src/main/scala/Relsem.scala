@@ -1,30 +1,49 @@
 package relsem.master
 
-//case classes for relatedness feature
-case class Source(id:Int, term:String)
-case class Target(source:Int, target:Int)
-
-/**
+/**	
+*				[[	EXERCISE 1  ]]
+*
 *	for removing stop words and do stemming on terms
+*	
 **/ 
 object Grammer {
-
-	private val VOWEL_CUTOFF = 3
 
 	private lazy val VOWELS = List("a", "e", "i", "o", "u")
 
 	private lazy val STOP_WORDS = List(
-		"the", "be", "to", "of", "and", "a", "in",
-		"that", "have", "i", "it", "for", "not", "on",
-		"with", "he", "as", "you", "do", "at"
+		"the", "be", 
+		"to", "of", 
+		"and", "a", 
+		"in", "that", 
+		"have", "i", 
+		"it", "for", 
+		"not", "on",
+		"with", "he", 
+		"as", "you", 
+		"do", "at"
+	)
+
+	private lazy val PUNCUATION = List(
+		".", ",", 
+		";", ":", 
+		"(", ")",
+		"!", "?"
 	)
 
 
-	def removeStopwords(term:String):Boolean = 
+	def isStopword(term:String):Boolean = 
 		STOP_WORDS.contains(term.toLowerCase)
+
+	def removePunctuation(term:String):String = {
+		term.split("").filterNot(l => {
+			PUNCUATION.contains(l)
+		}).foldRight("")(_ + _)
+	}
 
 	def termStemming(term:String):String = {
 		
+		val VOWEL_CUTOFF = 3
+
 		var vowelCount = 0; var slicePoint = 0
 		val lList = term.split("")
 
@@ -44,35 +63,46 @@ object Grammer {
 	}
 }
 
-class RelSem {
+//case classes for relatedness feature
+case class Source(id:Int, term:String)
+case class Target(source:Int, target:Int)
+
+/**	
+*				[[	EXERCISE 2 ]]
+*
+*	for removing stop words and do stemming on terms
+*	
+**/ 
+object RelSem {
 	
 	import math._
 
 	//collection of documents we already have stored
 	private lazy val collection = Map(
-		1 -> "computer technology computer",
-		2 -> "scala operating system computer",
-		3 -> "scala programming music technology"
+		1 ->   "hurricane isis",
+		2 ->   "mozambique joey sister",
+		3 ->   "isis hurricane joey",
+		4 ->   "diamond bay mozambique"
 	)
 
 	// list of terms we know about
 	private lazy val sources = List(
-		Source(1, "comput"),
-		Source(2, "technol"),
-		Source(3, "oper"),
-		Source(4, "system"),
-		Source(5, "scala"),
-		Source(6, "programm")
+		Source(1, "hurric"),
+		Source(2, "isis"),
+		Source(3, "mozamb"),
+		Source(4, "joey"),
+		Source(5, "sister"),
+		Source(6, "diamo"),
+		Source(8, "shelter"),
+		Source(9, "bay")
 	)
 
 	// links between terms (relatedness)
 	private lazy val targets = List(
-		Target(1, 2),
 		Target(1, 4),
-		Target(1, 6),
-		Target(2, 4),
-		Target(4, 3),
-		Target(6, 5)
+		Target(1, 2),
+		Target(5, 1),
+		Target(4, 8)
 	)
 
 	// res => { q1(document_results), ....., qn(document_results) }
@@ -80,7 +110,11 @@ class RelSem {
 		
 		query.filterNot(term => {
 
-			Grammer.removeStopwords(term)
+			Grammer.isStopword(term)
+
+		}).map(term => {
+
+			Grammer.removePunctuation(term)
 
 		}).map(term => {
 
@@ -118,13 +152,21 @@ class RelSem {
 	**/	
 	private def termFrequency(qTerm:String, document:String):Tuple2[Double, Double] = {
 		
-		var terms = document.split(" ").map(term => Grammer.termStemming(term))
-		var tf = terms.filter(term => term == qTerm).size
+		var dTerms = document.split(" ").map(term => {
 
+			Grammer.removePunctuation(term)
+
+		}).map(term => {
+
+			Grammer.termStemming(term)
+		})
+
+		var tf = dTerms.filter(term => term == qTerm).size
+		
 		val sourceQTerm = sources.find(s => s.term == qTerm).getOrElse(
 			throw new Exception("failed to find matching source\n\n"))
 
-		val termRelTotal = terms.filterNot(term => term == qTerm).map(term => {
+		val termRelTotal = dTerms.filterNot(term => term == qTerm).map(term => {
 			sources.find(source => source.term == term) match {
 				case Some(s) => relatedness(sourceQTerm.id, s.id, 1)
 				case _ => 0
@@ -161,11 +203,12 @@ class RelSem {
 // runner singleton
 object Test {
 	
-	val relsem = new RelSem()
-
 	def main(args:Array[String]) {
 
-		// calculate under stemming of the model
+		// EXERCISE 1:
+		// 
+		// calculate under stemming of the model  
+		// calculate level of compression
 		println(calUnderStemming(
 			List(
 				"reactive", 
@@ -184,10 +227,11 @@ object Test {
 				"programme"
 			), "programm"))
 
-		// rate documents for query
-		for(result <- doVectorSpaceModel("computer programming in scala")) {
-			println
-			println("Document results: " + result) 
+		// EXERCISE 2:
+		//
+		// calculate document relatedness
+		for(result <- doVectorSpaceModel("hurricane joey in mozambique")) {
+			println("\nDocument results: " + result + "\n=============================") 
 		}
 	}
 
@@ -206,6 +250,6 @@ object Test {
 	}
 
 	def doVectorSpaceModel(query:String):List[Iterable[Double]] = {
-	 	relsem.calculate(query.split(" ").toList)
+	 	RelSem.calculate(query.split(" ").toList)
 	}
 }
