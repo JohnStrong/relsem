@@ -4,17 +4,42 @@ package relsem.master
 case class Source(id:Int, term:String)
 case class Target(source:Int, target:Int)
 
-class Grammer(letter:String) {
+class Grammer(term:String) {
 
-	private lazy val vowel = List("a", "e", "i", "o", "u")
+	private val VOWEL_CUTOFF = 3
+	private lazy val VOWELS = List("a", "e", "i", "o", "u")
+	private lazy val STOP_WORDS = List(
+		"and", "or","the",
+		"an", "in", "for",
+		"do", "what", "be",
+		"had", "did"
+	)
 
-	def endWithDup():Boolean => //todo
-	def isVowel():Boolean = vowel.contains(letter)
+
+	def removeStopwords:Boolean = 
+		STOP_WORDS.contains(term.toLowerCase)
+
+	def termStemming:String = {
+		
+		var vowelCount = 0; var slicePoint = 0
+		val lList = term.split("")
+
+		lList.zipWithIndex.foreach{ 
+			case (l, ith) if vowelCount < VOWEL_CUTOFF => {
+				if(l VOWELS.contains(letter)) {
+					vowelCount += 1; slicePoint = ith
+				}
+			}
+			case _ => // do nothing
+		}
+
+		vowelCount match {
+			case vi:Int if vi == 3 => lList.slice(0, slicePoint).reduce(_ + _)
+			case _ => term
+		}
+	}
 }
-// INCLUDES: stemming
-// INCLUDES: term-relatedness evaluator
 
-// TODO: implement stop word removal
 class RelSem() {
 	
 	import math._
@@ -46,24 +71,16 @@ class RelSem() {
 		Target(6, 5)
 	)
 
-	// common words that can be removed from the query as they do not provide value
-	private lazy val stopwords = List(
-		"and", "or","the",
-		"an", "in", "for",
-		"do", "what", "be",
-		"had", "did"
-	)
-
 	// res => { q1(document_results), ....., qn(document_results) }
 	def calculate(query: List[String]):List[Iterable[Double]] = {
-	
+		
 		query.filterNot(term => {
 
-			stopwords.contains(term.toLowerCase)
+			new Grammer(term)removeStopwords
 
 		}).map(term => {
 
-			stem(term)
+			new Grammer(term).termStemming
 
 		}).map(term => {
 
@@ -90,41 +107,20 @@ class RelSem() {
 			ttf.filter( x => x > 0.0 ).size + 1.0))/log(2)
 	}
 
-	private def stem(term:String):String = {
-
-		implicit def gram(letter:String) = new Grammer(letter)
-
-		val lList = term.split("")
-		var vowelCount = 0; var slicePoint = 0
-
-		lList.zipWithIndex.foreach{ 
-			case (l, ith) if vowelCount < 3 => {
-				if(l isVowel) {
-					vowelCount += 1; slicePoint = ith
-				}
-			}
-			case _ => // do nothing
-		}
-
-		vowelCount match {
-			case vi:Int if vi == 3 => lList.slice(0, slicePoint).reduce(_ + _)
-			case _ => term
-		}
-	}
-
-	// (TermFrequency, TermToDocument Relatedness)
+	/** (TermFrequency, TermToDocument Relatedness)
+	*
+	* 	find the queried term id
+	* 	filter out every term in the document matching the query term
+	* 	map each resulting element against relatednes
+	**/	
 	private def termFrequency(qTerm:String, document:String):Tuple2[Double, Double] = {
 		
-		// stemming on documents
 		var terms = document.split(" ").map(term => stem(term))
 		var tf = terms.filter(term => term == qTerm).size
 
-		// find the queried term id
 		val sourceQTerm = sources.find(s => s.term == qTerm).getOrElse(
 			throw new Exception("failed to find matching source\n\n"))
 
-		// filter out every term in the document matching the query term
-		// map each resulting element against relatednes
 		val termRelTotal = terms.filterNot(term => term == qTerm).map(term => {
 			sources.find(source => source.term == term) match {
 				case Some(s) => relatedness(sourceQTerm.id, s.id, 1)
