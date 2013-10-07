@@ -7,6 +7,8 @@ case class Target(source:Int, target:Int)
 class Grammer(letter:String) {
 
 	private lazy val vowel = List("a", "e", "i", "o", "u")
+
+	def endWithDup():Boolean => //todo
 	def isVowel():Boolean = vowel.contains(letter)
 }
 // INCLUDES: stemming
@@ -55,11 +57,6 @@ class RelSem() {
 	// res => { q1(document_results), ....., qn(document_results) }
 	def calculate(query: List[String]):List[Iterable[Double]] = {
 	
-		def tFRS(term:String):Map[Int, (Double, Double)]  = {
-			for(document <- collection) yield (document._1, 
-				termFrequency(term, document._2))
-		}
-
 		query.filterNot(term => {
 
 			stopwords.contains(term.toLowerCase)
@@ -71,18 +68,24 @@ class RelSem() {
 		}).map(term => {
 
 			// measure the relatedness of a query term to each document
-			val tfrs = tFRS(term)
-			val ttf = tfrs.values.map(x => x._1 )
-			val ttr = tfrs.values.map(x => x._2 )
-			val idf = inverseDocumentFrequency(ttf)
+			val tfrs = termFreqRelatedness(term)
+			val totalTf = tfrs.values.map(x => x._1 )
+			val totalTr = tfrs.values.map(x => x._2 )
+			val idf = inverseDocFrequency(totalTf)
 
 			normalize(for(t <-
-				(ttf, ttr).zipped.map(_ + _)) yield (t * idf))
+				(totalTf, totalTr).zipped.map(_ + _)
+			) yield (t * idf))
 		})		
 	}
 
+	private def termFreqRelatedness(term:String):Map[Int, (Double, Double)]  = {
+		for(document <- collection) yield (document._1, 
+			termFrequency(term, document._2))
+	}
+
 	// returns the idf for each term in the query (helps to reduce the common word problem)
-	private def inverseDocumentFrequency(ttf:Iterable[Double]):Double = {
+	private def inverseDocFrequency(ttf:Iterable[Double]):Double = {
 		log((collection.size + 1)/(
 			ttf.filter( x => x > 0.0 ).size + 1.0))/log(2)
 	}
@@ -114,8 +117,6 @@ class RelSem() {
 		
 		// stemming on documents
 		var terms = document.split(" ").map(term => stem(term))
-		
-		// tf values
 		var tf = terms.filter(term => term == qTerm).size
 
 		// find the queried term id
@@ -149,14 +150,11 @@ class RelSem() {
 
 	// normalize the document to get the distance between the vectors
 	private def normalize(doc:Iterable[Double]):Iterable[Double] = {
-		
-		val total = sqrt(doc.map(x => x * x).sum)
-
-		if(total > 0.0)
-			doc.map(x => x/total)
-		else
-			doc.map(x => 0.0)
-	}	
+		sqrt(doc.map(x => x * x).sum) match {
+			case t:Double if t > 0 => doc.map(x => x/total)
+			case _ =>	doc.map(x => 0.0)
+		}
+	}
 }
 
 object Test extends App {
