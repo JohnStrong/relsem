@@ -4,29 +4,33 @@ package relsem.master
 case class Source(id:Int, term:String)
 case class Target(source:Int, target:Int)
 
-class Grammer(term:String) {
+/**
+*	for removing stop words and do stemming on terms
+**/ 
+object Grammer {
 
 	private val VOWEL_CUTOFF = 3
+
 	private lazy val VOWELS = List("a", "e", "i", "o", "u")
+
 	private lazy val STOP_WORDS = List(
-		"and", "or","the",
-		"an", "in", "for",
-		"do", "what", "be",
-		"had", "did"
+		"the", "be", "to", "of", "and", "a", "in",
+		"that", "have", "i", "it", "for", "not", "on",
+		"with", "he", "as", "you", "do", "at"
 	)
 
 
-	def removeStopwords:Boolean = 
+	def removeStopwords(term:String):Boolean = 
 		STOP_WORDS.contains(term.toLowerCase)
 
-	def termStemming:String = {
+	def termStemming(term:String):String = {
 		
 		var vowelCount = 0; var slicePoint = 0
 		val lList = term.split("")
 
 		lList.zipWithIndex.foreach{ 
 			case (l, ith) if vowelCount < VOWEL_CUTOFF => {
-				if(l VOWELS.contains(letter)) {
+				if(VOWELS.contains(l)) {
 					vowelCount += 1; slicePoint = ith
 				}
 			}
@@ -40,7 +44,7 @@ class Grammer(term:String) {
 	}
 }
 
-class RelSem() {
+class RelSem {
 	
 	import math._
 
@@ -76,11 +80,11 @@ class RelSem() {
 		
 		query.filterNot(term => {
 
-			new Grammer(term)removeStopwords
+			Grammer.removeStopwords(term)
 
 		}).map(term => {
 
-			new Grammer(term).termStemming
+			Grammer.termStemming(term)
 
 		}).map(term => {
 
@@ -107,15 +111,14 @@ class RelSem() {
 			ttf.filter( x => x > 0.0 ).size + 1.0))/log(2)
 	}
 
-	/** (TermFrequency, TermToDocument Relatedness)
-	*
-	* 	find the queried term id
+	/** 
+	*	find the queried term id
 	* 	filter out every term in the document matching the query term
 	* 	map each resulting element against relatednes
 	**/	
 	private def termFrequency(qTerm:String, document:String):Tuple2[Double, Double] = {
 		
-		var terms = document.split(" ").map(term => stem(term))
+		var terms = document.split(" ").map(term => Grammer.termStemming(term))
 		var tf = terms.filter(term => term == qTerm).size
 
 		val sourceQTerm = sources.find(s => s.term == qTerm).getOrElse(
@@ -139,7 +142,8 @@ class RelSem() {
 
 		targets.filter(target => target.source == queryTermId).map( term => term match {
 			case t:Target if t.target == docTermId => found = true; 0.5 * (1.0/depth)
-			case t:Target if t.target != docTermId && found == false => relatedness(t.target, docTermId, depth = depth + 1)
+			case t:Target if t.target != docTermId && found == false => 
+				relatedness(t.target, docTermId, depth = depth + 1)
 			case _ => 0
 		}).foldRight(0.0)(_ + _)
 	}
@@ -147,20 +151,61 @@ class RelSem() {
 	// normalize the document to get the distance between the vectors
 	private def normalize(doc:Iterable[Double]):Iterable[Double] = {
 		sqrt(doc.map(x => x * x).sum) match {
-			case t:Double if t > 0 => doc.map(x => x/total)
+			case t:Double if t > 0 => doc.map(x => x/t)
 			case _ =>	doc.map(x => 0.0)
 		}
 	}
 }
 
-object Test extends App {
+// quick test
+// runner singleton
+object Test {
 	
-	val results = new RelSem().calculate(
-		List("computer", "programming", "in", "scala")
-	)
+	val relsem = new RelSem()
 
-	for(result <- results){
-		println
-		println("Document results: " + result) 
+	def main(args:Array[String]) {
+
+		// calculate under stemming of the model
+		println(calUnderStemming(
+			List(
+				"reactive", 
+				"reacting", 
+				"reactor", 
+				"react",
+				"reaction", 
+				"reacts"
+			), "react"))
+
+		// calculate over stemming of the model
+		println(calOverStemming(
+			List(
+				"programming",
+				"program",
+				"programme"
+			), "programm"))
+
+		// rate documents for query
+		for(result <- doVectorSpaceModel("computer programming in scala")) {
+			println
+			println("Document results: " + result) 
+		}
+	}
+
+	def calUnderStemming(unStemmed:List[String], desired:String):Double = {
+		1 - ((unStemmed.map( _ match {
+			case term:String if Grammer.termStemming(term) == desired => 1
+			case _ => 0
+		}).foldRight(0.0)(_ + _))/unStemmed.size)
+	}
+
+	def calOverStemming(unStemmed:List[String], undesired:String):Double = {
+		1 - ((unStemmed.map( _ match {
+			case term:String if Grammer.termStemming(term) != undesired => 1
+			case _ => 0
+		}).foldRight(0.0)(_ + _))/unStemmed.size)
+	}
+
+	def doVectorSpaceModel(query:String):List[Iterable[Double]] = {
+	 	relsem.calculate(query.split(" ").toList)
 	}
 }
